@@ -11,5 +11,6 @@ services:
       - ./sessions:/app/src/sessions
       - ./messages.db:/app/messages.db
       - ./logs:/app/src/logs
+      - ./src:/app/src
     environment:
       - PYTHONUNBUFFERED=1
