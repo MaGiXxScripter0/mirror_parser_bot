@@ -1,0 +1,28 @@
+# - name: "Example Route"
+#   sourceId: 100123
+#   sourceTopicId: 55  # Optional
+#   targetId: 100456
+
+- name: "arty"
+  sourceId: "-1003123558650"  
+  sourceTopicId: 96
+  targetId: "-1003513526565"
+
+- name: "D"
+  sourceId: "-1003123558650"  
+  sourceTopicId: 95
+  targetId: "-1003884235750"
+
+- name: "kodak"
+  sourceId: "-1003123558650"  
+  sourceTopicId: 5134
+  targetId: "-1003836256308"
+
+- name: "kd"
+  sourceId: "-1003123558650"  
+  sourceTopicId: 5140
+  targetId: "-1003669135792"
+
+- name: "test"
+  sourceId: "-5083408795"
+  targetId: "-1003669135792"

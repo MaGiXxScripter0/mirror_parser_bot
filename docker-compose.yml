@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: miror_parser
+    restart: unless-stopped
+    volumes:
+      - ./.env:/app/.env
+      - ./routes.yml:/app/routes.yml
+      - ./sessions:/app/src/sessions
+      - ./messages.db:/app/messages.db
+      - ./logs:/app/src/logs
+    environment:
+      - PYTHONUNBUFFERED=1
