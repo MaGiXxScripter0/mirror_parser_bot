@@ -77,5 +77,27 @@ class TestDatabase(unittest.TestCase):
                  
         self.loop.run_until_complete(run_test())
 
+    def test_target_message_mapping(self):
+        async def run_test():
+            route = Route("mapping_test", 300, 400)
+            source_id = 123
+            target_id = 999
+            
+            # Add message
+            await self.deduper.add_processed(route, source_id)
+            
+            # Check target id is None
+            tid = await self.deduper.get_target_message_id(route.name, route.source_id, source_id)
+            self.assertIsNone(tid)
+            
+            # Update target id
+            await self.deduper.update_target_message_id(route.name, route.source_id, source_id, target_id)
+            
+            # Check target id
+            tid = await self.deduper.get_target_message_id(route.name, route.source_id, source_id)
+            self.assertEqual(tid, target_id)
+            
+        self.loop.run_until_complete(run_test())
+
 if __name__ == '__main__':
     unittest.main()

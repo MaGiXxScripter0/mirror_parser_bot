@@ -141,6 +141,9 @@ class Normalizer:
             grouped_id=message.grouped_id,
             is_album_part=bool(message.grouped_id)
         )
+
+        if message.reply_to:
+            msg.reply_to_msg_id = getattr(message.reply_to, 'reply_to_msg_id', None)
         
         msg.text = cls.get_effective_text(message)
         msg.entities = cls.map_entities(message.entities, msg.text)

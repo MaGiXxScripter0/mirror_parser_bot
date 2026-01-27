@@ -17,6 +17,7 @@ class ProcessedMessage(Base):
     source_chat_id = Column(Integer, nullable=False)
     source_message_id = Column(Integer, nullable=False)
     grouped_id = Column(Integer, nullable=True)
+    target_message_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     
     # Unique constraint for single messages
@@ -32,6 +33,19 @@ class Database:
     async def init_db(self):
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            
+            # Simple migration to add target_message_id if it's missing (e.g. from older schema)
+            # aiosqlite/sqlalchemy async doesn't easily support column check via metadata.create_all
+            from sqlalchemy import text
+            try:
+                # Check columns
+                result = await conn.execute(text("PRAGMA table_info(processed_messages)"))
+                columns = [row[1] for row in result.fetchall()]
+                if "target_message_id" not in columns:
+                    logger.info("Database migration: adding 'target_message_id' column to 'processed_messages'")
+                    await conn.execute(text("ALTER TABLE processed_messages ADD COLUMN target_message_id INTEGER"))
+            except Exception as e:
+                logger.error(f"Failed to run database migration: {e}")
 
     async def get_session(self) -> AsyncSession:
         return self.async_session()
@@ -68,3 +82,26 @@ class Deduper:
                 # E.g. UniqueViolation if race condition, though queue should prevent it
                 await session.rollback()
                 raise e
+
+    async def get_target_message_id(self, route_name: str, source_chat_id: int, source_message_id: int) -> Optional[int]:
+        async with await self.db.get_session() as session:
+            stmt = select(ProcessedMessage.target_message_id).where(
+                ProcessedMessage.route_name == route_name,
+                ProcessedMessage.source_chat_id == source_chat_id,
+                ProcessedMessage.source_message_id == source_message_id
+            )
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def update_target_message_id(self, route_name: str, source_chat_id: int, source_message_id: int, target_message_id: int):
+        async with await self.db.get_session() as session:
+            stmt = select(ProcessedMessage).where(
+                ProcessedMessage.route_name == route_name,
+                ProcessedMessage.source_chat_id == source_chat_id,
+                ProcessedMessage.source_message_id == source_message_id
+            )
+            result = await session.execute(stmt)
+            msg = result.scalar_one_or_none()
+            if msg:
+                msg.target_message_id = target_message_id
+                await session.commit()

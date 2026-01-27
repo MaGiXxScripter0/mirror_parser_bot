@@ -26,7 +26,7 @@ class TestNormalizer(unittest.TestCase):
         msg.sticker = None
 
         unified = asyncio.run(Normalizer.normalize(msg))
-        self.assertEqual(unified.text, "Hello World")
+        self.assertEqual(unified.text, "Hello World\n\n@mirrors_sliv")
         self.assertEqual(unified.source_chat_id, 100)
         self.assertIsNone(unified.source_topic_id)
         
@@ -67,6 +67,8 @@ class TestNormalizer(unittest.TestCase):
         
         unified2 = asyncio.run(Normalizer.normalize(msg2))
         self.assertEqual(unified2.source_topic_id, 456)
+        
+    def test_media_type_detection(self):
         msg = MagicMock()
         msg.id = 2
         msg.chat_id = 100
@@ -76,10 +78,31 @@ class TestNormalizer(unittest.TestCase):
         msg.entities = []
         msg.photo = True
         msg.video = None
+        msg.sticker = None
+        msg.document = None
+        msg.reply_to = None
         # ... other attrs None
 
         unified = asyncio.run(Normalizer.normalize(msg))
         self.assertEqual(unified.media_type, "photo")
+
+    def test_reply_extraction(self):
+        msg = MagicMock()
+        msg.id = 10
+        msg.chat_id = 300
+        msg.date = datetime.now()
+        msg.grouped_id = None
+        msg.message = "Reply Msg"
+        msg.entities = []
+        msg.photo = None
+        
+        # Mock reply info
+        msg.reply_to.reply_to_msg_id = 777
+        msg.reply_to.reply_to_top_id = None
+        msg.reply_to.forum_topic = False
+        
+        unified = asyncio.run(Normalizer.normalize(msg))
+        self.assertEqual(unified.reply_to_msg_id, 777)
 
 class TestListenerFilters(unittest.TestCase):
     def setUp(self):
@@ -129,6 +152,31 @@ class TestListenerFilters(unittest.TestCase):
         msg_no_reply.date = datetime.now(timezone.utc)
         msg_no_reply.reply_to = None
         self.assertFalse(self.listener._should_process(msg_no_reply, route))
+
+    def test_content_blacklist(self):
+        route = Route("test_route", 1, 2)
+        Config.BLACKLIST_WORDS = ["mirror", "миррор"]
+        
+        # Clean message
+        msg_ok = MagicMock()
+        msg_ok.date = datetime.now(timezone.utc)
+        msg_ok.message = "This is a fine message"
+        msg_ok.reply_to = None
+        self.assertTrue(self.listener._should_process(msg_ok, route))
+        
+        # Blacklisted message (English)
+        msg_bad = MagicMock()
+        msg_bad.date = datetime.now(timezone.utc)
+        msg_bad.message = "This contains a mirror word"
+        msg_bad.reply_to = None
+        self.assertFalse(self.listener._should_process(msg_bad, route))
+        
+        # Blacklisted message (Russian)
+        msg_bad_ru = MagicMock()
+        msg_bad_ru.date = datetime.now(timezone.utc)
+        msg_bad_ru.message = "Тут есть слово миррор"
+        msg_bad_ru.reply_to = None
+        self.assertFalse(self.listener._should_process(msg_bad_ru, route))
 
 if __name__ == '__main__':
     unittest.main()

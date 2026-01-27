@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import os
-from typing import List, Union
+from typing import List, Union, Optional
 from aiogram import Bot, exceptions
 from aiogram.types import FSInputFile, InputMediaPhoto, InputMediaVideo, InputMediaDocument, InputMediaAudio
 from aiogram.utils.token import TokenValidationError
@@ -23,9 +23,9 @@ class BotSender:
         logger.warning(f"FloodWait: sleeping {e.retry_after}s")
         await asyncio.sleep(e.retry_after)
 
-    async def send_message(self, target_chat_id: int, message: UnifiedMessage, topic_id: int = None):
+    async def send_message(self, target_chat_id: int, message: UnifiedMessage, topic_id: int = None, reply_to_message_id: int = None) -> Optional[int]:
         if not self.bot:
-            return
+            return None
 
         try:
             # Prepare entities logic: aiogram expects list of MessageEntity objects or None
@@ -35,7 +35,7 @@ class BotSender:
             
             # Actually, aiogram `bot.send_message` expects `entities` as `List[MessageEntity]`.
             # Let's import MessageEntity and reconstruct.
-            from aiogram.types import MessageEntity
+            from aiogram.types import MessageEntity, ReplyParameters
             
             entities = [MessageEntity(**e) for e in message.entities] if message.entities else None
             
@@ -43,45 +43,50 @@ class BotSender:
             kwargs = {
                 "chat_id": target_chat_id,
                 "message_thread_id": topic_id,
+                "reply_parameters": ReplyParameters(message_id=reply_to_message_id) if reply_to_message_id else None
             }
 
+            sent_msg = None
             if message.media_path:
                 media_file = FSInputFile(message.media_path)
                 
                 if message.media_type == "photo":
-                    await self.bot.send_photo(photo=media_file, caption=message.text, caption_entities=entities, **kwargs)
+                    sent_msg = await self.bot.send_photo(photo=media_file, caption=message.text, caption_entities=entities, **kwargs)
                 elif message.media_type == "video":
-                    await self.bot.send_video(video=media_file, caption=message.text, caption_entities=entities, supports_streaming=True, **kwargs)
+                    sent_msg = await self.bot.send_video(video=media_file, caption=message.text, caption_entities=entities, supports_streaming=True, **kwargs)
                 elif message.media_type == "document":
-                    await self.bot.send_document(document=media_file, caption=message.text, caption_entities=entities, **kwargs)
+                    sent_msg = await self.bot.send_document(document=media_file, caption=message.text, caption_entities=entities, **kwargs)
                 elif message.media_type == "voice":
-                    await self.bot.send_voice(voice=media_file, caption=message.text, caption_entities=entities, **kwargs)
+                    sent_msg = await self.bot.send_voice(voice=media_file, caption=message.text, caption_entities=entities, **kwargs)
                 elif message.media_type == "audio":
-                    await self.bot.send_audio(audio=media_file, caption=message.text, caption_entities=entities, **kwargs)
+                    sent_msg = await self.bot.send_audio(audio=media_file, caption=message.text, caption_entities=entities, **kwargs)
                 elif message.media_type == "animation":
-                    await self.bot.send_animation(animation=media_file, caption=message.text, caption_entities=entities, **kwargs)
+                    sent_msg = await self.bot.send_animation(animation=media_file, caption=message.text, caption_entities=entities, **kwargs)
                 elif message.media_type == "sticker":
-                    await self.bot.send_sticker(sticker=media_file, **kwargs)
+                    sent_msg = await self.bot.send_sticker(sticker=media_file, **kwargs)
                 else:
                     # Fallback or unknown
                     logger.warning(f"Unknown media type {message.media_type}, sending as document")
-                    await self.bot.send_document(document=media_file, caption=message.text, caption_entities=entities, **kwargs)
+                    sent_msg = await self.bot.send_document(document=media_file, caption=message.text, caption_entities=entities, **kwargs)
             else:
                 # Text only
                 if message.text:
-                    await self.bot.send_message(text=message.text, entities=entities, **kwargs)
+                    sent_msg = await self.bot.send_message(text=message.text, entities=entities, **kwargs)
                 else:
                     logger.debug(f"Skipping empty message {message.source_message_id}")
 
+            return sent_msg.message_id if sent_msg else None
+
         except exceptions.TelegramRetryAfter as e:
             await self._handle_flood_wait(e)
-            await self.send_message(target_chat_id, message, topic_id) # Retry
+            return await self.send_message(target_chat_id, message, topic_id, reply_to_message_id) # Retry
         except Exception as e:
             logger.error(f"Failed to send message to {target_chat_id}: {e}", exc_info=True)
+            return None
 
-    async def send_album(self, target_chat_id: int, messages: List[UnifiedMessage], topic_id: int = None):
+    async def send_album(self, target_chat_id: int, messages: List[UnifiedMessage], topic_id: int = None, reply_to_message_id: int = None) -> List[int]:
         if not self.bot or not messages:
-            return
+            return []
 
         try:
             # Construct MediaGroup
@@ -90,7 +95,7 @@ class BotSender:
             # We will attach captions to respective items.
             
             media_group = []
-            from aiogram.types import MessageEntity
+            from aiogram.types import MessageEntity, ReplyParameters
             
             for msg in messages:
                 if not msg.media_path:
@@ -110,12 +115,19 @@ class BotSender:
                 # Voice, sticker, animation rarely in albums in the same way with mixed types, usually photos/videos
             
             if not media_group:
-                return
+                return []
 
-            await self.bot.send_media_group(chat_id=target_chat_id, media=media_group, message_thread_id=topic_id)
+            sent_messages = await self.bot.send_media_group(
+                chat_id=target_chat_id, 
+                media=media_group, 
+                message_thread_id=topic_id,
+                reply_parameters=ReplyParameters(message_id=reply_to_message_id) if reply_to_message_id else None
+            )
+            return [m.message_id for m in sent_messages]
             
         except exceptions.TelegramRetryAfter as e:
             await self._handle_flood_wait(e)
-            await self.send_album(target_chat_id, messages, topic_id)
+            return await self.send_album(target_chat_id, messages, topic_id, reply_to_message_id)
         except Exception as e:
             logger.error(f"Failed to send album to {target_chat_id}: {e}", exc_info=True)
+            return []

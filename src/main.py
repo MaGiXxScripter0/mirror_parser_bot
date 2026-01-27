@@ -13,7 +13,7 @@ from src.normalizer import UnifiedMessage
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-async def sender_worker(queue: asyncio.Queue, sender: BotSender):
+async def sender_worker(queue: asyncio.Queue, sender: BotSender, deduper: Deduper):
     logger.info("Sender worker started")
     while True:
         try:
@@ -25,24 +25,54 @@ async def sender_worker(queue: asyncio.Queue, sender: BotSender):
             
             if isinstance(payload, list):
                 # Album
-                await sender.send_album(target, payload, target_topic)
+                msgs = payload
+                # Find reply target
+                reply_to_target_id = None
+                # Use the first message of the album to find reply target if any
+                first_msg = msgs[0]
+                if first_msg.reply_to_msg_id:
+                     reply_to_target_id = await deduper.get_target_message_id(
+                         route.name, first_msg.source_chat_id, first_msg.reply_to_msg_id
+                     )
+
+                target_message_ids = await sender.send_album(target, msgs, target_topic, reply_to_target_id)
+                
+                # Mapping target IDs back to source IDs
+                if target_message_ids:
+                    for i, msg in enumerate(msgs):
+                        if i < len(target_message_ids):
+                            await deduper.update_target_message_id(
+                                route.name, msg.source_chat_id, msg.source_message_id, target_message_ids[i]
+                            )
+
                 # Cleanup tmp files
-                for msg in payload:
+                for msg in msgs:
                     if msg.media_path and os.path.exists(msg.media_path):
                         os.remove(msg.media_path)
             else:
                 # Single message
-                await sender.send_message(target, payload, target_topic)
-                if payload.media_path and os.path.exists(payload.media_path):
-                    os.remove(payload.media_path)
+                msg = payload
+                reply_to_target_id = None
+                if msg.reply_to_msg_id:
+                    reply_to_target_id = await deduper.get_target_message_id(
+                        route.name, msg.source_chat_id, msg.reply_to_msg_id
+                    )
+
+                target_message_id = await sender.send_message(target, msg, target_topic, reply_to_target_id)
+                
+                if target_message_id:
+                    await deduper.update_target_message_id(
+                        route.name, msg.source_chat_id, msg.source_message_id, target_message_id
+                    )
+
+                if msg.media_path and os.path.exists(msg.media_path):
+                    os.remove(msg.media_path)
                     
             queue.task_done()
         except asyncio.CancelledError:
             break
         except Exception as e:
             logger.error(f"Worker error: {e}", exc_info=True)
-            # Ideally verify if task_done needs calling or if we retry
-            # Here we just log and continue to avoid killing worker
 
 async def main():
     # Init DB
@@ -57,7 +87,7 @@ async def main():
     sender = BotSender()
     
     # Start Worker
-    worker_task = asyncio.create_task(sender_worker(queue, sender))
+    worker_task = asyncio.create_task(sender_worker(queue, sender, deduper))
     
     # Init Listener
     listener = Listener(deduper, queue)
