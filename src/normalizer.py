@@ -150,12 +150,12 @@ class Normalizer:
         current_len_utf16 = len(msg.text.encode('utf-16-le')) // 2
         
         # 2. Append footer
-        footer_text = "\n\n@mirors_sliv"
+        footer_text = "\n\n@mirrors_sliv"
         msg.text += footer_text
         
-        # 3. Add entity for @mirors_sliv
+        # 3. Add entity for @mirrors_sliv
         # Offset is current_len + 1 (for \n)
-        # Length is 12 (@mirors_sliv)
+        # Length is 12 (@mirrors_sliv)
         
         # Only add if it's text (though media captions also support entities)
         # Bot API supports entities for captions too.
@@ -163,19 +163,19 @@ class Normalizer:
         # However, checking if msg.text was empty? 
         # If empty, initial len is 0. offset is 1. "\n@..." -> it will start with newline.
         # Usually captions can't start with newline if empty? 
-        # If text is empty, maybe skip \n? -> "@mirors_sliv"
+        # If text is empty, maybe skip \n? -> "@mirrors_sliv"
         
         if current_len_utf16 > 0:
             offset = current_len_utf16 + 1
             # Check length of footer username
-            # "@mirors_sliv" -> 12 chars.
+            # "@mirrors_sliv" -> 12 chars.
             length = 12 
         else:
             # If empty text, we might want to avoid leading newline?
             # User said "via new line", usually implies separation.
-            # But if empty, just "@mirors_sliv" looks better than "\n@mirors_sliv".
+            # But if empty, just "@mirrors_sliv" looks better than "\n@mirrors_sliv".
             # Let's trim the newline if empty.
-            msg.text = "@mirors_sliv" # Overwrite the += result correction
+            msg.text = "@mirrors_sliv" # Overwrite the += result correction
             offset = 0
             length = 12
 

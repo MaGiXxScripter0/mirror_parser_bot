@@ -78,9 +78,20 @@ class Listener:
             # Simplification:
             current_thread = message.reply_to.reply_to_top_id if message.reply_to else None
             
+            
             if current_thread != route.source_topic_id:
                 return False
                 
+        # 3. Content Filter (Blacklist)
+        # Check text/caption for blacklist words
+        text_content = message.message or ""
+        if text_content:
+            lower_text = text_content.lower()
+            for word in Config.BLACKLIST_WORDS:
+                if word in lower_text:
+                    logger.info(f"Skipping message {message.id}: contains blacklist word '{word}'")
+                    return False
+
         return True
 
     async def _handle_new_message(self, event: events.NewMessage.Event):
