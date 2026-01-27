@@ -28,6 +28,7 @@ class Config:
     DB_NAME = os.getenv("DB_NAME", "messages.db")
     SESSION_NAME = "src/sessions/userbot"
     ROUTES_FILE = "routes.yml"
+    POLLING_INTERVAL = float(os.getenv("POLLING_INTERVAL", "5"))
     
     BLACKLIST_WORDS = ["mirror", "миррор", "cismirror"]
 

@@ -1,4 +1,5 @@
 import datetime
+import logging
 from typing import Optional
 from sqlalchemy import Column, Integer, String, DateTime, Index
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
@@ -6,6 +7,8 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy.future import select
 
 from src.config import Config
+
+logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 

@@ -3,7 +3,7 @@ import logging
 import datetime
 import os
 from collections import defaultdict
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from telethon import TelegramClient, events
 from telethon.tl.types import Message
@@ -23,6 +23,8 @@ class Listener:
         # Per-chat processing
         self.chat_queues: Dict[int, asyncio.Queue] = {}
         self.chat_tasks: Dict[int, asyncio.Task] = {}
+        self.polling_task: Optional[asyncio.Task] = None
+        self.last_seen: Dict[int, int] = {}
         
         # Route lookups
         self.source_routes: Dict[int, List[Route]] = defaultdict(list)
@@ -36,18 +38,22 @@ class Listener:
         # Register event handler
         self.client.add_event_handler(self._handle_new_message, events.NewMessage())
         
+        if Config.POLLING_INTERVAL > 0:
+            self.polling_task = asyncio.create_task(self._poll_sources())
+        
         logger.info("Listener started.")
         await self.client.run_until_disconnected()
 
     async def _handle_new_message(self, event: events.NewMessage.Event):
         message: Message = event.message
         chat_id = message.chat_id
+        self._update_last_seen(chat_id, message.id)
         
         if chat_id not in self.chat_queues:
             self.chat_queues[chat_id] = asyncio.Queue()
             self.chat_tasks[chat_id] = asyncio.create_task(self._chat_processor(chat_id))
             
-        await self.chat_queues[chat_id].put(message)
+        await self.chat_queues[chat_id].put((message, False))
 
     async def _chat_processor(self, chat_id: int):
         """Processes messages for a specific chat sequentially."""
@@ -64,7 +70,7 @@ class Listener:
                 if album_id is not None:
                     try:
                         # Wait for next part or flush
-                        message = await asyncio.wait_for(self.chat_queues[chat_id].get(), timeout=2.0)
+                        message, allow_old = await asyncio.wait_for(self.chat_queues[chat_id].get(), timeout=2.0)
                     except asyncio.TimeoutError:
                         # Flush album
                         await self._flush_album(album_route, album_messages)
@@ -74,7 +80,7 @@ class Listener:
                         continue
                 else:
                     # Normal wait
-                    message = await self.chat_queues[chat_id].get()
+                    message, allow_old = await self.chat_queues[chat_id].get()
 
                 # Process message
                 possible_routes = self.source_routes.get(chat_id)
@@ -83,7 +89,7 @@ class Listener:
                     continue
 
                 for route in possible_routes:
-                    if not self._should_process(message, route):
+                    if not self._should_process(message, route, allow_old=allow_old):
                         continue
                     
                     if await self.deduper.is_processed(route, message.id):
@@ -121,6 +127,42 @@ class Listener:
             except Exception as e:
                 logger.error(f"Error in chat processor {chat_id}: {e}", exc_info=True)
 
+    async def _poll_sources(self):
+        await self._init_last_seen()
+        while True:
+            try:
+                for source_id in self.source_routes.keys():
+                    min_id = self.last_seen.get(source_id, 0)
+                    async for message in self.client.iter_messages(
+                        source_id, min_id=min_id, reverse=True
+                    ):
+                        self._update_last_seen(source_id, message.id)
+                        await self._ensure_chat_queue(source_id)
+                        await self.chat_queues[source_id].put((message, True))
+                await asyncio.sleep(Config.POLLING_INTERVAL)
+            except Exception as e:
+                logger.error(f"Polling error: {e}", exc_info=True)
+                await asyncio.sleep(max(Config.POLLING_INTERVAL, 1))
+
+    async def _init_last_seen(self):
+        for source_id in self.source_routes.keys():
+            try:
+                msgs = await self.client.get_messages(source_id, limit=1)
+                if msgs:
+                    self.last_seen[source_id] = msgs[0].id
+            except Exception as e:
+                logger.warning(f"Failed to init last_seen for {source_id}: {e}")
+
+    def _update_last_seen(self, chat_id: int, message_id: int):
+        current = self.last_seen.get(chat_id, 0)
+        if message_id > current:
+            self.last_seen[chat_id] = message_id
+
+    async def _ensure_chat_queue(self, chat_id: int):
+        if chat_id not in self.chat_queues:
+            self.chat_queues[chat_id] = asyncio.Queue()
+            self.chat_tasks[chat_id] = asyncio.create_task(self._chat_processor(chat_id))
+
     async def _process_single_message(self, message: Message, route: Route):
         unified_msg = await Normalizer.normalize(message)
         if unified_msg.media_type:
@@ -145,11 +187,12 @@ class Listener:
             
         await self.queue.put((route, unified_group))
 
-    def _should_process(self, message: Message, route: Route) -> bool:
+    def _should_process(self, message: Message, route: Route, allow_old: bool = False) -> bool:
         # 1. Time filter
-        now = datetime.datetime.now(datetime.timezone.utc)
-        if (now - message.date).total_seconds() > 300:
-            return False
+        if not allow_old:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            if (now - message.date).total_seconds() > 300:
+                return False
 
         # 2. Topic filter
         if route.source_topic_id:
