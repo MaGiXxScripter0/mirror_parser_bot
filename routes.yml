@@ -1,43 +1,44 @@
-# # - name: "Example Route"
-# #   sourceId: 100123
-# #   sourceTopicId: 55  # Optional
-# #   targetId: 100456
+# - name: "Example Route"
+#   sourceId: 100123
+#   sourceTopicId: 55  # Optional
+#   targetId: 100456
 
-# - name: "arty"
-#   sourceId: "-1003123558650"  
-#   sourceTopicId: 96
-#   targetId: "-1003513526565"
+- name: "arty"
+  sourceId: "-1003123558650"  
+  sourceTopicId: 96
+  targetId: "-1003513526565"
 
-# - name: "D"
-#   sourceId: "-1003123558650"  
-#   sourceTopicId: 95
-#   targetId: "-1003884235750"
+- name: "D"
+  sourceId: "-1003123558650"  
+  sourceTopicId: 95
+  targetId: "-1003884235750"
 
-# - name: "kodak"
-#   sourceId: "-1003123558650"  
-#   sourceTopicId: 5134
-#   targetId: "-1003836256308"
+- name: "kodak"
+  sourceId: "-1003123558650"  
+  sourceTopicId: 5134
+  targetId: "-1003836256308"
 
-# - name: "kd"
-#   sourceId: "-1003123558650"  
-#   sourceTopicId: 5140
-#   targetId: "-1003669135792"
+- name: "kd"
+  sourceId: "-1003123558650"  
+  sourceTopicId: 5140
+  targetId: "-1003669135792"
 
-# - name: "LanosPark"
-#   sourceId: "-1003123558650"
-#   sourceTopicId: 5136
-#   targetId: "-1003660416196"
+- name: "LanosPark"
+  sourceId: "-1003123558650"
+  sourceTopicId: 5136
+  targetId: "-1003660416196"
 
-# - name: "ramar shitpost"
-#   sourceId: "-1003123558650"
-#   sourceTopicId: 97
-#   targetId: "-1003884190072"
+- name: "ramar shitpost"
+  sourceId: "-1003123558650"
+  sourceTopicId: 97
+  targetId: "-1003884190072"
 
-# - name: "sanchez"
-#   sourceId: "-1003123558650"
-#   sourceTopicId: 16412
-#   targetId: "-1003891408673"
+- name: "sanchez"
+  sourceId: "-1003123558650"
+  sourceTopicId: 16412
+  targetId: "-1003891408673"
 
 - name: "test"
-  sourceId: "-5083408795"
+  sourceId: "-1003881713458"
+  sourceTopicId: 2
   targetId: "-1003708217202"

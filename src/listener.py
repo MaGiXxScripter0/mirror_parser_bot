@@ -187,6 +187,20 @@ class Listener:
             
         await self.queue.put((route, unified_group))
 
+    @staticmethod
+    def _extract_topic_id(message: Message) -> Optional[int]:
+        # Prefer direct attribute if present on the message
+        topic_id = getattr(message, "reply_to_top_id", None)
+        if topic_id:
+            return topic_id
+        if message.reply_to:
+            topic_id = getattr(message.reply_to, "reply_to_top_id", None)
+            if topic_id:
+                return topic_id
+            if getattr(message.reply_to, "forum_topic", False):
+                return getattr(message.reply_to, "reply_to_msg_id", None)
+        return None
+
     def _should_process(self, message: Message, route: Route, allow_old: bool = False) -> bool:
         # 1. Time filter
         if not allow_old:
@@ -196,9 +210,7 @@ class Listener:
 
         # 2. Topic filter
         if route.source_topic_id:
-            if not message.reply_to:
-                 return False
-            current_thread = getattr(message.reply_to, 'reply_to_top_id', None)
+            current_thread = self._extract_topic_id(message)
             if current_thread != route.source_topic_id:
                 return False
                 
