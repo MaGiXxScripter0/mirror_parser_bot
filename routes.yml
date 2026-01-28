@@ -38,6 +38,11 @@
   sourceTopicId: 16412
   targetId: "-1003891408673"
 
+- name: "arty positions"
+  sourceId: "-1003123558650"
+  sourceTopicId: 5143
+  targetId: "-1003805423121"
+
 - name: "test"
   sourceId: "-1003881713458"
   sourceTopicId: 2
